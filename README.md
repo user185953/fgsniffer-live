@@ -1,10 +1,16 @@
-# fgsniffer
-Convert Fortigates "diagnose sniffer" output to pcap files  
+# fgsniffer-live
+Execute live tcpdump on Fortigate using "diagnose sniffer", output to pcap files  
 
 ## The scope
-Some FortiGate Models like the FG100E don't have a disk, so you can't use the WebUIs "Packet Capture" menu to create pcap files. The workaround is to use the CLI and create a verbose output and convert this with a Perl script. The Perl stuff didn't work for me so I created this tool. A compiled small binary converts session logs to pcap files that can be opened with wireshark.
+Some FortiGate Models like the FG100E don't have a disk, so you can't use the WebUIs "Packet Capture" menu to create pcap files. The workaround is to use the CLI and create a verbose output and convert this with a Perl script. The Perl stuff didn't work for me so I created this tool. A compiled small binary converts session logs to pcap files that can be opened with wireshark. A shell wrapper script is provided to execute capture with live tcpdump output.
 
-## How to create a pcap
+## Comparison to original fgsniffer by Dirk Duesentrieb
+Input is read only from stdin, command line arguments are used to restricts packets that will be displayed live.
+
+## How to perform live capture
+### TBD
+
+## How to create a pcap "the old way"
 ### 1 Create a log file
 It depends on your ssh client how logs are created. 
 #### Linux/openssh
@@ -59,18 +65,11 @@ It is a good idea to always add "a" to the sniffer options to have a proper time
 If you limit your filter to one interface level '3' is fine. But if you need to follow a packet through the box you can use level '6' and the interface 'any'. fgsniffer will create a file for every interface so you don't loose this information. I recommend using '6' all of the time. 
 
 ## Installing fgsniffer
-The tool is one statically linked binary. Installing is as simple as [download](https://github.com/DirkDuesentrieb/fgsniffer/releases), unzip and run.
+The tool is one statically linked binary. If your GOBIN is part of your global PATH you can run fgsniffer from anywhere in your filesystem.
 
 ## Compiling fgsniffer
 If you haven't used GO before, please read https://golang.org/doc/install and set up the required GOPATH and GOBIN environment.
-### Linux
 ```
-go get github.com/DirkDuesentrieb/fgsniffer
-go install $GOPATH/src/github.com/DirkDuesentrieb/fgsniffer/fgsniffer.go
+go build fgsniffer-live.go
 ```
-### Windows (PowerShell)
-```
-go get github.com/DirkDuesentrieb/fgsniffer
-go install $Env:GOPATH\src\github.com\DirkDuesentrieb\fgsniffer\fgsniffer.go
-```
-If your GOBIN is part of your global PATH you can run fgsniffer from anywhere in your filesystem.
+
