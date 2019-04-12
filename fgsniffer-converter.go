@@ -13,13 +13,14 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"bytes"
 	"time"
 )
 
 const (
 	globalHeader string = "d4c3b2a1020004000000000000000000ee05000001000000"
 	info         string = "\nfgsniffer\n\nConvert text captures to pcap files. On the fortigate use\n\tdiagnose sniffer packet <interface> '<filter>' <3|6> <count> a\nto create a parsable dump.\n\n"
-	unsafe       string = "[]{}/\\*"
+	pathUnsafe   string = "[]{}/\\*!?"
 )
 
 type (
@@ -31,6 +32,7 @@ type (
 		size     int64
 		secs, ms int64  // the packets timestamp
 		port     string // the network port (verbose=6)
+		direction string // the transit direction (verbose=6)
 	}
 )
 
@@ -38,6 +40,7 @@ func main() {
 	var scanner *bufio.Scanner
 	var p packet
 	now := time.Now()
+	fnamebase := now.Format("fgs20060102-1504")
 
 	if len(os.Args) == 2 {
 		if os.Args[1] == "-?" || os.Args[1] == "-h" {
@@ -54,13 +57,16 @@ func main() {
 	} else {
 		scanner = bufio.NewScanner(os.Stdin)
 	}
-	hexLine := regexp.MustCompile("^0x([0-9a-f]+)[ |\t]+(.*$)")
 	// absolute time
 	headLineA := regexp.MustCompile("^([0-9-]+ [0-9][0-9]:[0-9][0-9]:[0-9][0-9])\\.([0-9]+) .*$")
+	// local time is not supported
+	//headLineL := regexp.MustCompile("NOT SUPPORTED")
 	// relative time
 	headLineR := regexp.MustCompile("^([0-9]+)\\.([0-9]+) .*$")
 	// verbose mode 6
 	headLine6 := regexp.MustCompile("\\.[0-9]+ ([^ ]+) (in|out|--) ")
+	// packet data
+	hexLine := regexp.MustCompile("^0x([0-9a-f]+)[ |\t]+([0-9a-f ]+).*$")
 
 	pcps := pcaps{make(map[string]int)}
 
@@ -68,9 +74,9 @@ func main() {
 		date := ""
 		mseconds := ""
 		iface := ""
+		direction := ""
 		match := false
 		line := scanner.Text()
-		hexData := hexLine.FindStringSubmatch(line)
 
 		// packet header with absolute time
 		header := headLineA.FindStringSubmatch(line)
@@ -94,23 +100,27 @@ func main() {
 		header = headLine6.FindStringSubmatch(line)
 		if match && len(header) == 3 {
 			iface = header[1]
+			direction = header[2]
 		}
+		// flush previous packet
 		if match {
-			pcps.addPacket(p)
-			p = newPacket(date, mseconds, iface)
+			pcps.addPacket(fnamebase, p)
+			p = newPacket(date, mseconds, iface, direction)
 		}
 
 		// packet hex data
+		hexData := hexLine.FindStringSubmatch(line)
 		if len(hexData) == 3 {
-			p.addData(strings.Replace(hexData[2][:39], " ", "", -1))
+			p.addData(strings.Replace(hexData[2], " ", "", -1))
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return
 	}
-	// clean up
-	pcps.addPacket(p)
+	// flush last packet
+	pcps.addPacket(fnamebase, p)
+
 	for name, packets := range pcps.pcap {
 		fmt.Println("created output file", name, "with", packets, "packets.")
 	}
@@ -122,7 +132,7 @@ func (pcps *pcaps) newPcap(name string) (err error) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	err = appendStringToFile(name, globalHeader)
+	err = appendBytesToFile(name, []byte(globalHeader))
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -130,10 +140,10 @@ func (pcps *pcaps) newPcap(name string) (err error) {
 }
 
 // create a new packet. We need some data from the header
-func newPacket(date, mseconds, iface string) packet {
+func newPacket(date, mseconds, iface string, direction string) packet {
 	t, _ := time.Parse("2006-01-02 15:04:05", date)
 	ms, _ := strconv.ParseInt(mseconds, 10, 64)
-	return packet{"", 0, t.Unix(), ms, iface}
+	return packet{"", 0, t.Unix(), ms, iface, direction}
 }
 
 // add a data line to the packet
@@ -143,25 +153,37 @@ func (p *packet) addData(data string) {
 }
 
 // all hex lines complete, write the packet to the pcap
-func (pcps *pcaps) addPacket(p packet) {
+func (pcps *pcaps) addPacket(fnamebase string, p packet) {
 	if p.size == 0 {
 		return
 	}
-	fname := "fgsniffer"
+	var fnamebuffer bytes.Buffer
+	fnamebuffer.WriteString(fnamebase)
+
 	if p.port != "" {
-		for i := 0; i < len(unsafe); i++ {
-			p.port = strings.Replace(p.port, string(unsafe[i]), "_", -1)
+		portClean := []byte(p.port)
+		for i := 0; i < len(pathUnsafe); i++ {
+			portClean = bytes.Replace(portClean, []byte(string(pathUnsafe[i])), []byte("_"), -1)
 		}
-		fname += "-" + p.port
+		fnamebuffer.WriteString("-");
+		fnamebuffer.WriteString(p.direction);
+		fnamebuffer.WriteString("-");
+		fnamebuffer.Write(portClean);
 	}
-	fname += ".pcap"
+	fnamebuffer.WriteString(".pcap");
+	fname := fnamebuffer.String()
 	_, found := pcps.pcap[fname]
 	if !found {
 		pcps.pcap[fname] = 0
 		_ = pcps.newPcap(fname)
 	}
-	header := switchEndian(p.secs) + switchEndian(p.ms) + switchEndian(p.size) + switchEndian(p.size)
-	err := appendStringToFile(fname, header+p.data)
+	var wbuffer bytes.Buffer
+	wbuffer.Write(switchEndian(p.secs))
+	wbuffer.Write(switchEndian(p.ms))
+	wbuffer.Write(switchEndian(p.size))
+	wbuffer.Write(switchEndian(p.size))
+	wbuffer.WriteString(p.data)
+	err := appendBytesToFile(fname, wbuffer.Bytes())
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -169,23 +191,23 @@ func (pcps *pcaps) addPacket(p packet) {
 }
 
 // 11259375 -> 00abcdef -> efcdab00
-func switchEndian(n int64) (r string) {
+func switchEndian(n int64) []byte {
 	b := fmt.Sprintf("%08x", n)
+	var rbuffer bytes.Buffer
 	for i := 0; i < 4; i++ {
 		start := 6 - 2*i
-		r = r + b[start:start+2]
+		rbuffer.WriteString(b[start:start+2])
 	}
-	return
+	return rbuffer.Bytes()
 }
 
 // convert the hex data in string to binary and write it to file
-func appendStringToFile(file, text string) error {
+func appendBytesToFile(file string, src []byte) error {
 	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	src := []byte(text)
 	dst := make([]byte, hex.DecodedLen(len(src)))
 	_, err = hex.Decode(dst, src)
 	if err != nil {
