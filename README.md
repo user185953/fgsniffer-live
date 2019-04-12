@@ -1,5 +1,5 @@
 # fgsniffer-live
-Execute live tcpdump on Fortigate using "diagnose sniffer", output to pcap files  
+Execute live tcpdump on Fortigate using "diagnose sniffer", output to screen and to pcap files  
 
 ## The scope
 Some FortiGate Models like the FG100E don't have a disk, so you can't use the WebUIs "Packet Capture" menu to create pcap files. The workaround is to use the CLI and create a verbose output and convert this with a Perl script. The Perl stuff didn't work for me so I created this tool. A compiled small binary converts session logs to pcap files that can be opened with wireshark. A shell wrapper script is provided to execute capture with live tcpdump output.
@@ -7,8 +7,27 @@ Some FortiGate Models like the FG100E don't have a disk, so you can't use the We
 ## Comparison to original fgsniffer by Dirk Duesentrieb
 Input is read only from stdin, command line arguments are used to restricts packets that will be displayed live.
 
+## First-time configuration of fgsniffer-live.sh
+### CLInoMOREhack
+By default, Fortigates are configured to pipe all executed commands through "| more", which corrupts the output.
+This script contains a workaround for this behavior: It replaces the pipe with "| grep ^", which passes it unharmed.
+However, the only way to solve the increase in buffering and latency is to configure all your fortigates to global;config system console; set output normal;
+After you do this, edit the header of fgsniffer-live.sh and choose the "CLInoMOREhack=''" option.
+
+### VDOM selection
+The script, as of now, supports only a configuration with one VDOM
+Before use, you must configure a vdom name in the header of fgsniffer-live.
+
+### Fortigate IP address list
+Before use, you must fill in the hostname-IP table located roughly in the middle of the script.
+The script requires to know the IP of the fortigate to avoid capturing its own ssh connection.
+Remaining connection details can be configured in ~/.ssh/config, as usual.
+
 ## How to perform live capture
-### TBD
+```
+~ $ fgsniffer-live.sh [-n count] [-i interface|any] host [filter]
+```
+If packet count is not specified, capture will run until terminated
 
 ## How to create a pcap "the old way"
 ### 1 Create a log file
