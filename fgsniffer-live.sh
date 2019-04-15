@@ -5,30 +5,27 @@ set -e
 CLInoMOREhack=' | grep ^'	# Choose if some of your units are configured config-system-console; set-output-more (FGT default)
 #CLInoMOREhack=''		# Choose if ALL your units are configured "set output normal". This may reduce latency.
 
-fgcommand_vdom='
-config vdom
-edit Prod'
+default_vdom="Prod"		# Will be tab-completed, first few letters are sufficient
 
 #################################
 
 host=""
+vdom="$default_vdom"
 interface="any"
 userfilter=""
 mode=6
 count=0
 
 usage() {
-	echo "Usage: $0 [-n count] [-i interface|any] host [filter]"
+	echo "Usage: $0 [-n count] [-d vdom] [-i interface|any] host [filter]"
 	exit $1
 }
 
-fgcommand_sniff="$fgcommand_vdom"'
-diag sniffer packet %s "%s" %s %s a'"$CLInoMOREhack"
-
-while getopts "hn:i:" opt; do
+while getopts "hn:d:i:" opt; do
 	case "$opt" in
 		h)	usage 0 ;;
 		n)	count="$OPTARG" ;;
+		d)	vdom="$OPTARG" ;;
 		i)	interface="$OPTARG" ;;
 		*)	usage 1 ;;
 	esac
@@ -62,7 +59,15 @@ Unsupported host \"$host\", try one of:
 	2	fw2
 	3	fw3
 END
+		exit 1 ;;
 esac
+
+fgcommand_vdom='
+config vdom
+edit '"$vdom"'	 '
+
+fgcommand_sniff="$fgcommand_vdom"'
+diag sniffer packet %s "%s" %s %s a'"$CLInoMOREhack"
 
 if ! [ 0 -le "$count" ]; then
 	echo "ERROR: count \"$count\" is not a number"
