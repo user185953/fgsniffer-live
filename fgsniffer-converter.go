@@ -39,6 +39,7 @@ type (
 func main() {
 	var scanner *bufio.Scanner
 	var p packet
+	var stdoutfilter string
 	now := time.Now()
 	fnamebase := now.Format("fgs20060102-1504")
 
@@ -47,16 +48,11 @@ func main() {
 			fmt.Println(info)
 			os.Exit(0)
 		} else {
-			f, err := os.Open(os.Args[1])
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err)
-				os.Exit(1)
-			}
-			scanner = bufio.NewScanner(f)
+			stdoutfilter = os.Args[1]
 		}
-	} else {
-		scanner = bufio.NewScanner(os.Stdin)
 	}
+	scanner = bufio.NewScanner(os.Stdin)
+
 	// absolute time
 	headLineA := regexp.MustCompile("^([0-9-]+ [0-9][0-9]:[0-9][0-9]:[0-9][0-9])\\.([0-9]+) .*$")
 	// local time is not supported
@@ -104,7 +100,7 @@ func main() {
 		}
 		// flush previous packet
 		if match {
-			pcps.addPacket(fnamebase, p)
+			pcps.addPacket(fnamebase, stdoutfilter, p)
 			p = newPacket(date, mseconds, iface, direction)
 		}
 
@@ -119,10 +115,10 @@ func main() {
 		return
 	}
 	// flush last packet
-	pcps.addPacket(fnamebase, p)
+	pcps.addPacket(fnamebase, stdoutfilter, p)
 
 	for name, packets := range pcps.pcap {
-		fmt.Println("created output file", name, "with", packets, "packets.")
+		fmt.Fprintln(os.Stderr, "created output file", name, "with", packets, "packets.")
 	}
 }
 
@@ -153,7 +149,7 @@ func (p *packet) addData(data string) {
 }
 
 // all hex lines complete, write the packet to the pcap
-func (pcps *pcaps) addPacket(fnamebase string, p packet) {
+func (pcps *pcaps) addPacket(fnamebase string, stdoutfilter string, p packet) {
 	if p.size == 0 {
 		return
 	}
@@ -188,6 +184,24 @@ func (pcps *pcaps) addPacket(fnamebase string, p packet) {
 		fmt.Println(err)
 	}
 	pcps.pcap[fname]++
+
+	// stdout passthrough enabled?
+	if stdoutfilter != "" {
+		// stdout passthrough rules matched: Packet has no port, port match, any match, direction match, packet has no direction
+		if p.port == "" || p.port == stdoutfilter || stdoutfilter == "any" || stdoutfilter == p.direction || p.direction == "--" {
+			fname := "/dev/stdout"
+			_, found := pcps.pcap[fname]
+			if !found {
+				pcps.pcap[fname] = 0
+				_ = pcps.newPcap(fname)
+			}
+			err := appendBytesToFile(fname, wbuffer.Bytes())
+			if err != nil {
+				fmt.Println(err)
+			}
+			pcps.pcap[fname]++
+		}
+	}
 }
 
 // 11259375 -> 00abcdef -> efcdab00

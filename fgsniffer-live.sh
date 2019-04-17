@@ -12,21 +12,23 @@ default_vdom="Prod"		# Will be tab-completed, first few letters are sufficient
 host=""
 vdom="$default_vdom"
 interface="any"
+outfilter=""
 userfilter=""
 mode=6
 count=0
 
 usage() {
-	echo "Usage: $0 [-n count] [-d vdom] [-i interface|any] host [filter]"
+	echo "Usage: $0 [-n count] [-d vdom] [-i interface|any] [-o interface|in|out] host [filter]"
 	exit $1
 }
 
-while getopts "hn:d:i:" opt; do
+while getopts "hn:d:i:o:" opt; do
 	case "$opt" in
 		h)	usage 0 ;;
 		n)	count="$OPTARG" ;;
 		d)	vdom="$OPTARG" ;;
 		i)	interface="$OPTARG" ;;
+		o)	outfilter="$OPTARG" ;;
 		*)	usage 1 ;;
 	esac
 done
@@ -82,4 +84,13 @@ else
 	filter="$sshfilter"
 fi
 
-printf "$fgcommand_sniff" "$interface" "$filter" "$mode" "$count" | ssh "$hostIP" | sed 's/^[^#]\+ # *//' | fgsniffer-converter
+# Prepare livecommand and its args
+if [ -n "$outfilter" ]; then
+	livecommand="tcpdump"
+	set -- -nr -
+else
+	livecommand="cat"
+	set -- '-'
+fi
+
+printf "$fgcommand_sniff" "$interface" "$filter" "$mode" "$count" | ssh "$hostIP" | sed 's/^[^#]\+ # *//' | fgsniffer-converter "$outfilter" | "$livecommand" "$@"
