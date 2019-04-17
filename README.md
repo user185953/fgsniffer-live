@@ -25,9 +25,11 @@ Remaining connection details can be configured in ~/.ssh/config, as usual.
 
 ## How to perform live capture
 ```
-~ $ fgsniffer-live.sh [-n count] [-i interface|any] host [filter]
+~ $ fgsniffer-live.sh [-n count] [-i interface|any] [-o interface|in|out] host [filter]
 ```
 If packet count is not specified, capture will run until terminated
+-i chooses interface on fortigate
+-o decodes selected packets on-screen
 
 ## How to create a pcap "the old way"
 ### 1 Create a log file
