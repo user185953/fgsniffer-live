@@ -14,11 +14,12 @@ vdom="$default_vdom"
 interface="any"
 outfilter=""
 userfilter=""
+localfilter=""
 mode=6
 count=0
 
 usage() {
-	echo "Usage: $0 [-n count] [-d vdom] [-i interface|any] [-o interface|in|out] host [filter]"
+	echo "Usage: $0 [-n count] [-d vdom] [-i interface|any] [-o interface|in|out|any] host [filter [local-filter]]"
 	exit $1
 }
 
@@ -35,6 +36,7 @@ done
 shift `expr $OPTIND - 1`
 
 case "$#" in
+	3)	host="$1"; userfilter="$2"; localfilter="$3";;
 	2)	host="$1"; userfilter="$2" ;;
 	1)	host="$1";;
 	0)	echo "Missing mandatory argument: Host" >&2
@@ -87,7 +89,11 @@ fi
 # Prepare livecommand and its args
 if [ -n "$outfilter" ]; then
 	livecommand="tcpdump"
-	set -- -nr -
+	if [ -n "$localfilter" ]; then
+		set -- -nr - "$localfilter"
+	else
+		set -- -nr -
+	fi
 else
 	livecommand="cat"
 	set -- '-'
