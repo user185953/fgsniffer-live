@@ -162,8 +162,8 @@ func (pcps *pcaps) addPacket(fnamebase string, stdoutfilter string, p packet) {
 			portClean = bytes.Replace(portClean, []byte(string(pathUnsafe[i])), []byte("_"), -1)
 		}
 		fnamebuffer.WriteString("-");
-		fnamebuffer.WriteString(p.direction);
-		fnamebuffer.WriteString("-");
+		//fnamebuffer.WriteString(p.direction);
+		//fnamebuffer.WriteString("-");
 		fnamebuffer.Write(portClean);
 	}
 	fnamebuffer.WriteString(".pcap");
